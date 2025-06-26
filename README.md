@@ -1,4 +1,6 @@
-# gradle-maven-publish-plugin
+# SEON Gradle Maven Publish Plugin
+
+> **Note**: This is a modified version of the [original gradle-maven-publish-plugin](https://github.com/vanniktech/gradle-maven-publish-plugin) by Niklas Baudy, with fixes for Sonatype service shutdown handling.
 
 Gradle plugin that creates a `publish` task to automatically upload all of your Java, Kotlin or Android
 libraries to any Maven instance. This plugin is based on [Chris Banes initial implementation](https://github.com/chrisbanes/gradle-mvn-push)
@@ -13,6 +15,34 @@ For modifying what is getting published see [configuring what to publish](https:
 
 There is also a [base plugin](https://vanniktech.github.io/gradle-maven-publish-plugin/base/) that doesn't apply any
 default configuration and allows the most customization.
+
+## Using the SEON version
+
+This modified version fixes issues with the Sonatype repository build service shutdown that could cause build failures with `MissingValueException`. To use this version in your project:
+
+```kotlin
+// settings.gradle.kts
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+// build.gradle.kts
+plugins {
+    id("io.seon.gradle.maven.publish") version "0.33.0"
+}
+```
+
+### Modifications
+
+This fork includes the following improvements:
+
+- Fixed error handling in `SonatypeRepositoryBuildService.kt` to prevent build failures during service shutdown
+- Added proper exception handling for `MissingValueException` and other runtime exceptions
+- Improved logging to provide better visibility into service shutdown issues
+- Published under the `io.seon.gradle` namespace to distinguish from the original plugin
 
 # Supported plugins
 

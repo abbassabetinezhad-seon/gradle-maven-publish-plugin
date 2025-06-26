@@ -1,0 +1,14 @@
+SEON Gradle Maven Publish Plugin
+Copyright 2025 SEON
+
+This product includes software developed by Niklas Baudy
+(https://github.com/vanniktech/gradle-maven-publish-plugin)
+
+This is a modified version that handles Sonatype service shutdown gracefully.
+The original software is licensed under the Apache License, Version 2.0.
+
+Modifications:
+- Fixed error handling in SonatypeRepositoryBuildService.kt to prevent build failures during service shutdown
+- Added proper exception handling for MissingValueException and other runtime exceptions
+- Improved logging to provide better visibility into service shutdown issues
+- Published under the io.seon.gradle namespace to distinguish from the original plugin

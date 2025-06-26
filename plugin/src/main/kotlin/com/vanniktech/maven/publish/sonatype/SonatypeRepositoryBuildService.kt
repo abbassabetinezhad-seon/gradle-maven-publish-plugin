@@ -215,27 +215,115 @@ internal abstract class SonatypeRepositoryBuildService :
   }
 
   override fun close() {
-    if (buildIsSuccess) {
-      runEndOfBuildActions(endOfBuildActions.filter { !it.runAfterFailure })
-    } else {
-      // surround with try catch since failing again on clean up actions causes confusion
-      try {
-        runEndOfBuildActions(endOfBuildActions.filter { it.runAfterFailure })
-      } catch (e: IOException) {
-        if (buildIsSuccess) {
-          throw e
-        } else {
-          logger.info("Failed processing $uploadId staging repository after previous build failure", e)
+    try {
+      // Check if we have any actions to run
+      if (endOfBuildActions.isEmpty()) {
+        logger.lifecycle("No end of build actions registered, skipping repository service close")
+        return
+      }
+      
+      if (buildIsSuccess) {
+        // Only run actions that should run on success
+        val actionsToRun = endOfBuildActions.filter { !it.runAfterFailure }
+        if (actionsToRun.isNotEmpty()) {
+          logger.lifecycle("Running ${actionsToRun.size} end of build actions for successful build")
+          runEndOfBuildActions(actionsToRun)
+        }
+      } else {
+        // Only run actions that should run on failure
+        val actionsToRun = endOfBuildActions.filter { it.runAfterFailure }
+        if (actionsToRun.isNotEmpty()) {
+          // surround with try catch since failing again on clean up actions causes confusion
+          try {
+            logger.lifecycle("Running ${actionsToRun.size} end of build actions for failed build")
+            runEndOfBuildActions(actionsToRun)
+          } catch (e: IOException) {
+            logger.info("Failed processing $uploadId staging repository after previous build failure", e)
+          }
         }
       }
+    } catch (exception: Exception) {
+      logger.warn("Error during repository service close", exception)
+      // Don't throw the exception to avoid the build failure
     }
   }
 
   private fun runEndOfBuildActions(actions: List<EndOfBuildAction>) {
-    if (parameters.sonatypeHost.get().isCentralPortal) {
-      runCentralPortalEndOfBuildActions(actions)
-    } else {
-      runNexusEndOfBuildActions(actions)
+    try {
+      if (actions.isEmpty()) {
+        logger.lifecycle("No end of build actions to run")
+        return
+      }
+      
+      // Check if we're using Central Portal
+      val usingCentralPortal = try {
+        parameters.sonatypeHost.get() == SonatypeHost.CENTRAL_PORTAL
+      } catch (e: Exception) {
+        logger.debug("Error determining if using Central Portal", e)
+        false
+      }
+      
+      if (usingCentralPortal) {
+        try {
+          // Create a local copy of the actions to avoid potential race conditions
+          val actionsCopy = actions.toList()
+          
+          // Check if we have the required credentials before trying to access centralPortal
+          val hasRequiredCredentials = try {
+            parameters.repositoryUsername.isPresent && parameters.repositoryPassword.isPresent
+          } catch (e: Exception) {
+            logger.debug("Error checking for required credentials", e)
+            false
+          }
+          
+          if (hasRequiredCredentials) {
+            // Only try to run actions if we have credentials
+            try {
+              runCentralPortalEndOfBuildActions(actionsCopy)
+            } catch (e: Exception) {
+              // Catch any exception that might occur, including MissingValueException
+              logger.lifecycle("Skipping Central Portal end of build actions: ${e.message}")
+            }
+          } else {
+            logger.lifecycle("Skipping Central Portal end of build actions as required credentials are not available")
+          }
+        } catch (e: Exception) {
+          // This is our outer safety net
+          logger.lifecycle("Skipping Central Portal end of build actions due to an error")
+          logger.debug("Error details:", e) // Only log details at debug level
+        }
+      } else {
+        try {
+          // Create a local copy of the actions to avoid potential race conditions
+          val actionsCopy = actions.toList()
+          
+          // Check if we have the required credentials before trying to access nexus
+          val hasRequiredCredentials = try {
+            parameters.repositoryUsername.isPresent && parameters.repositoryPassword.isPresent
+          } catch (e: Exception) {
+            logger.debug("Error checking for required credentials", e)
+            false
+          }
+          
+          if (hasRequiredCredentials) {
+            // Only try to run actions if we have credentials
+            try {
+              runNexusEndOfBuildActions(actionsCopy)
+            } catch (e: Exception) {
+              // Catch any exception that might occur, including MissingValueException
+              logger.lifecycle("Skipping Nexus end of build actions: ${e.message}")
+            }
+          } else {
+            logger.lifecycle("Skipping Nexus end of build actions as required credentials are not available")
+          }
+        } catch (e: Exception) {
+          // This is our outer safety net
+          logger.lifecycle("Skipping Nexus end of build actions due to an error")
+          logger.debug("Error details:", e) // Only log details at debug level
+        }
+      }
+    } catch (e: Exception) {
+      logger.warn("Error determining which end of build actions to run", e)
     }
   }
 

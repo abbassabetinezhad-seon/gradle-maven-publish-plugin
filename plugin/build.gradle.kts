@@ -8,18 +8,16 @@ plugins {
 gradlePlugin {
   plugins {
     create("mavenPublishPlugin") {
-      id = "com.vanniktech.maven.publish"
+      id = "io.seon.gradle.maven.publish"
       implementationClass = "com.vanniktech.maven.publish.MavenPublishPlugin"
-      displayName = "Gradle Maven Publish Plugin"
-      description = "Gradle plugin that configures publish tasks to automatically upload all of your Java, Kotlin, " +
-        "Gradle, or Android libraries to any Maven instance."
+      displayName = "Gradle Maven Publish Plugin (SEON Fixed)"
+      description = "Fixed version of Gradle Maven Publish Plugin that handles Sonatype service shutdown gracefully"
     }
     create("mavenPublishBasePlugin") {
-      id = "com.vanniktech.maven.publish.base"
+      id = "io.seon.gradle.maven.publish.base"
       implementationClass = "com.vanniktech.maven.publish.MavenPublishBasePlugin"
-      displayName = "Gradle Maven Publish Base Plugin"
-      description = "Gradle plugin that configures publish tasks to automatically upload all of your Java, Kotlin, " +
-        "Gradle, or Android libraries to any Maven instance."
+      displayName = "Gradle Maven Publish Base Plugin (SEON Fixed)"
+      description = "Fixed version of Gradle Maven Publish Base Plugin that handles Sonatype service shutdown gracefully"
     }
   }
 }
@@ -34,7 +32,7 @@ val integrationTestImplementation = configurations["integrationTestImplementatio
 
 buildConfig {
   packageName("com.vanniktech.maven.publish")
-  buildConfigField("String", "NAME", "\"com.vanniktech.maven.publish\"")
+  buildConfigField("String", "NAME", "\"io.seon.gradle.maven.publish\"")
   buildConfigField("String", "VERSION", "\"${project.findProperty("VERSION_NAME") ?: "dev"}\"")
 
   sourceSets.getByName(integrationTestSourceSet.name) {
@@ -195,4 +193,61 @@ val quickIntegrationTest by tasks.registering {
 
 tasks.check {
   dependsOn(integrationTest)
+}
+
+// Configure publishing with proper attribution
+plugins.apply("maven-publish")
+plugins.apply("signing")
+
+publishing {
+  publications {
+    withType<MavenPublication>().configureEach {
+      // Customize POM with attribution to original project
+      pom {
+        name.set("SEON Gradle Maven Publish Plugin")
+        description.set("Fixed version of Gradle Maven Publish Plugin that handles Sonatype service shutdown gracefully")
+        url.set("https://github.com/seon-io/gradle-maven-publish-plugin")
+        
+        licenses {
+          license {
+            name.set("The Apache License, Version 2.0")
+            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+            distribution.set("repo")
+          }
+        }
+        
+        developers {
+          developer {
+            id.set("seon")
+            name.set("SEON")
+            url.set("https://github.com/seon-io")
+          }
+          developer {
+            id.set("vanniktech")
+            name.set("Niklas Baudy")
+            url.set("https://github.com/vanniktech")
+          }
+        }
+        
+        scm {
+          url.set("https://github.com/seon-io/gradle-maven-publish-plugin")
+          connection.set("scm:git:git://github.com/seon-io/gradle-maven-publish-plugin.git")
+          developerConnection.set("scm:git:ssh://git@github.com/seon-io/gradle-maven-publish-plugin.git")
+        }
+        
+        // Add original project information
+        properties.set(mapOf(
+          "originalProject" to "https://github.com/vanniktech/gradle-maven-publish-plugin",
+          "modifiedBy" to "SEON",
+          "modificationPurpose" to "Fix Sonatype service shutdown handling"
+        ))
+      }
+      
+      // Disable Gradle module metadata
+      suppressAllPomMetadataWarnings()
+      
+      // Remove the Gradle module metadata artifact
+      artifacts.removeIf { it.classifier == null && it.extension == "module" }
+    }
+  }
 }
